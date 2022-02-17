@@ -34,7 +34,7 @@ def find_timeshift_between_dfs(
     cols_df1,
     cols_df2,
     use_circular_statistics=False,
-    t_step=td(days=30),
+    t_step=np.timedelta64(30*24, 'h'),
     correct_y_shift=False,
     y_shift_range=np.arange(-180.0, 180.0, 2.0),
     opt_bounds=None,
@@ -89,7 +89,7 @@ def find_timeshift_between_dfs(
 
     print('Resampling dataframes to a common time vector. ' +
           'This may take a while...')
-    time_array = min_time + np.arange(0, max_time - min_time + dt, dt)
+    time_array = min_time + np.arange(0, max_time - min_time + np.timedelta64(dt), dt)
     max_gap = 1.5 * dt
     df1 = fsato.df_resample_by_interpolation(
         df1,
@@ -203,36 +203,36 @@ def find_timeshift_between_dfs(
     return output_list
 
 
-def find_bias_x(x_1, y_1, x_2, y_2, search_range, search_dx):
-    x_1 = np.array(x_1)
-    y_2 = np.array(y_2)
+# def find_bias_x(x_1, y_1, x_2, y_2, search_range, search_dx):
+#     x_1 = np.array(x_1)
+#     y_2 = np.array(y_2)
 
-    def errfunc(dx, x_1, x_2, y_1, y_2):
-        y_1_cor = np.interp(x_2, x_1 - dx, y_1)
+#     def errfunc(dx, x_1, x_2, y_1, y_2):
+#         y_1_cor = np.interp(x_2, x_1 - dx, y_1)
 
-        # Clean up data
-        clean_data = (~np.isnan(y_1_cor)) & (~np.isnan(y_2))
-        y_1_cor = y_1_cor[clean_data]
-        y_2 = y_2[clean_data]
+#         # Clean up data
+#         clean_data = (~np.isnan(y_1_cor)) & (~np.isnan(y_2))
+#         y_1_cor = y_1_cor[clean_data]
+#         y_2 = y_2[clean_data]
 
-        if all(np.isnan(y_1_cor)) and all(np.isnan(y_2)):
-            cost = np.nan
-        else:
-            cost = -1.0 * spst.pearsonr(y_1_cor, y_2)[0]
-        return cost
+#         if all(np.isnan(y_1_cor)) and all(np.isnan(y_2)):
+#             cost = np.nan
+#         else:
+#             cost = -1.0 * spst.pearsonr(y_1_cor, y_2)[0]
+#         return cost
 
-    cost_min = 1.0e15
-    success = False
-    p1 = [0.0]
-    for dx_opt in np.arange(search_range[0], search_range[1], search_dx):
-        cost_eval = errfunc(dx_opt, x_1, x_2, y_1, y_2)
-        if cost_eval <= cost_min:
-            p1 = [dx_opt]
-            cost_min = cost_eval
-            success = True
-    dx_opt = p1[0]
+#     cost_min = 1.0e15
+#     success = False
+#     p1 = [0.0]
+#     for dx_opt in np.arange(search_range[0], search_range[1], search_dx):
+#         cost_eval = errfunc(dx_opt, x_1, x_2, y_1, y_2)
+#         if cost_eval <= cost_min:
+#             p1 = [dx_opt]
+#             cost_min = cost_eval
+#             success = True
+#     dx_opt = p1[0]
 
-    return dx_opt, success
+#     return dx_opt, success
 
 
 def match_y_curves_by_offset(yref, ytest, dy_eval=None, angle_wrapping=True):

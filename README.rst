@@ -1,6 +1,9 @@
 ==========
 FLORIS-based Analysis for SCADA data (FLASC)
 ==========
+
+**Further documentation is available at http://flasc.readthedocs.io/.**
+
 FLASC provides a rich suite of analysis tools for SCADA data
 filtering & analysis, wind farm model validation, field experiment design,
 and field experiment monitoring. The repository is centrally built around
@@ -10,6 +13,26 @@ to, among others, quantify wake losses in synthetic and historical data, to
 perform turbine northing calibrations, and for model parameter estimation.
 
 For technical questions, please send an email to bart.doekemeijer@nrel.gov.
+
+.. image:: https://readthedocs.org/projects/flasc/badge/?version=main
+   :target: http://flasc.readthedocs.io/
+   :alt: Documentation status
+
+.. image:: https://github.com/NREL/flasc/actions/workflows/continuous-integration-workflow.yaml/badge.svg?branch=main
+   :target: https://github.com/NREL/flasc/actions
+   :alt: Automated tests success
+
+.. image:: https://codecov.io/gh/nrel/flasc/branch/main/graph/badge.svg
+   :target: https://app.codecov.io/gh/nrel/flasc/
+   :alt: Code coverage
+
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+    :target: https://github.com/psf/black
+    :alt: Code formatting style
+
+.. image:: https://img.shields.io/badge/License-Apache_2.0-blue.svg
+    :target: https://opensource.org/licenses/Apache-2.0
+    :alt: Apache 2.0 License
 
 Installation
 ------------
@@ -30,12 +53,19 @@ FLASC consists of multiple modules, including:
 * *flasc.time_operations*: This module allows the user to easily downsample, upsample and calculate moving averages of a data frame with SCADA and/or FLORIS data. These functions allow the user to specify which columns contain angular variables, and consequently 360 deg wrapping is taken care	of. It also allows the user to calculate the min, max, std and median for downsampled data frames. It leverages efficient functions inherent in	pandas to maximize performance.
 * *flasc.turbine_analysis*: this module allows the user to analyze SCADA data on a turbine level. Outliers can be detected and removed. Filtering methods include sensor-stuck type of fault detection and analysis of the turbine wind speed-power curve.
 
-Feature wishlist
---------
-* Add additional filtering functions (e.g., Local Outlier Factor)
-* Add circular bootstrapping
-* Add in-function documentation
-* Add Readthedocs documentation
-* Add automated testing
-* Rely on OpenOA functions as possible
-* Optional: add additional demo wind farms
+License
+------------
+
+Copyright 2021 NREL
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

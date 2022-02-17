@@ -15,10 +15,7 @@ import datetime
 
 import numba
 import numpy as np
-from numpy.core.defchararray import not_equal
-import scipy.interpolate as interp
-
-from sklearn.metrics import pairwise_distances_argmin_min as pwdist
+# import scipy.interpolate as interp
 
 from floris.utilities import wrap_360
 
@@ -48,7 +45,7 @@ def estimate_dt(time_array):
 
     # Check if data is all ascending
     if dt <= datetime.timedelta(0):
-        raise DataError('Please only insert time ascending data.')
+        raise UserWarning('Please only insert time ascending data.')
 
     return dt
 
@@ -66,7 +63,7 @@ def interp_with_max_gap(x, xp, fp, max_gap, kind, wrap_around_360=False):
 
     # Check format of max_gap: needs to be an integer/float
     if not isinstance(max_gap, (float, int)):
-        max_gap = max_gap / np.timedelta64(1, 's')
+        max_gap = np.timedelta64(max_gap) / np.timedelta64(1, 's')
 
     if wrap_around_360:
         fp_cos = np.cos(fp * np.pi / 180.0)
@@ -161,13 +158,18 @@ def _interpolate_with_max_gap(
         ij = ij + 1  # Do nothing, leave values as nans
 
     # Loop through all cases that fall inside xp
+    exit_loop = False
     for ii in range(ij, len(x)):
         # Move left interp point, if necessary
         while x[ii] > xp_full[idx_left_interp_point + 1]:
             idx_left_interp_point += 1
             if ((idx_left_interp_point + 1) >= len(xp_full)):
                 # Exit, we are now to the right of max. point xp
+                exit_loop=True
                 break
+
+        if exit_loop:
+            break
 
         # Calculate coordinates to interpolate
         x1 = xp_full[idx_left_interp_point]

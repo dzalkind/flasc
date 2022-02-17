@@ -11,11 +11,13 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
+    'floris==2.4',
     'feather-format>=0.4.1',
     'matplotlib>=3',
+    'numpy<=1.20',
     'numba',
     'openoa>=2.0.1',
-    'pandas>=0.24',
+    'pandas>=1.3.0',
     'pyproj>=2.1',
     'pytest>=4',
     'SALib>=1.4.0.2',
