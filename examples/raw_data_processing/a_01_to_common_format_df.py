@@ -15,23 +15,21 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
-
 import glob
-
 import pyarrow.parquet as pq
-
 import time
-
 from flasc import time_operations as to
-
 import multiprocessing as mp
 
 
 import os
 
-resamp_dir = '/Users/dzalkind/Projects/AWAKEN/Engie_SCADA/processed/resampled_1'
-if not os.path.exists(resamp_dir):
-    os.makedirs(resamp_dir)
+DT = 5
+
+resamp_dir = f'/Users/dzalkind/Projects/AWAKEN/Engie_SCADA/processed/resampled_{DT}'
+comb_dir = f'/Users/dzalkind/Projects/AWAKEN/Engie_SCADA/processed/combined_{DT}'
+os.makedirs(resamp_dir,exist_ok=True)
+os.makedirs(comb_dir,exist_ok=True)
 
 
 def load_data():
@@ -75,11 +73,11 @@ def a_01_resample(inputs):
         df_engie = pd.read_parquet(files[0],engine='pyarrow')
 
     scada_mapping = {
-        'WindSpeed':f'ws_{wt_number:03d}',
-        'WindDirection':f'wd_{wt_number:03d}',
-        'InternalStatus':f'status_{wt_number:03d}',
-        'NacelleAngle':f'yaw_{wt_number:03d}',
-        'ActivePower':f'pow_{wt_number:03d}'   
+        'WindSpeed':f'ws_{wt_number-1:03d}',
+        'WindDirection':f'wd_{wt_number-1:03d}',
+        'Status':f'status_{wt_number-1:03d}',
+        'NacelleAngle':f'yaw_{wt_number-1:03d}',
+        'ActivePower':f'pow_{wt_number-1:03d}'   
     }
 
     # Set up raw and new dataframes
@@ -88,7 +86,7 @@ def a_01_resample(inputs):
 
     drop_cols = [col for col in df_engie.columns if col not in ['date','value']]
 
-    tt = get_time_array(1,month,year)
+    tt = get_time_array(DT,month,year)
 
     for channel, new_name in scada_mapping.items():
         df_raw[channel] = df_engie.loc[df_engie['tag'] == channel].reset_index(drop=True)
@@ -104,12 +102,16 @@ def a_01_resample(inputs):
         else:
             circ = False
             
-        if channel in ['NacelleAngle','InternalStatus']:
-            interp_method = 'previous'
+        if channel in ['NacelleAngle','Status']:
+            interp_method = 'nearest'
+            max_gap = 1
+            df_new[new_name] = to.df_resample_by_interpolation(df_raw[channel],tt,circ,interp_method,max_gap=max_gap)
+            df_new[new_name]['value'].loc[0] = df_new[new_name]['value'].loc[df_new[new_name]['value'].first_valid_index()]
+            df_new[new_name] = df_new[new_name].ffill()
         else:
             interp_method = 'linear'
-        
-        df_new[new_name] = to.df_resample_by_interpolation(df_raw[channel],tt,circ,interp_method,max_gap=600)
+            max_gap = 600 
+            df_new[new_name] = to.df_resample_by_interpolation(df_raw[channel],tt,circ,interp_method,max_gap=max_gap)
 
     # Join dataframes
     for val in df_new:
@@ -135,7 +137,7 @@ if __name__ == "__main__":
     # "ws_001", and so on. This helps to further automate and align
     # the next steps in data processing.
 
-    months = [12]
+    months = range(1,12)
     years = [2021]
     wt_numbers = range(1,89)
 
@@ -152,6 +154,12 @@ if __name__ == "__main__":
                 inputs['wt_number'] = wt_number
                 input_list.append(inputs)
 
+                filename = os.path.join(resamp_dir,f'resamp_wt{wt_number:03d}_{year:4d}_{month:02d}.ftr')
+            
+                if not os.path.exists(filename):
+                    input_list.append(inputs)
+                    # print(filename)
+
     # Run cases
     if cores == 1:
         for inp in input_list:
@@ -161,5 +169,22 @@ if __name__ == "__main__":
         p = mp.Pool(cores)
         with p:
             p.map(a_01_resample,input_list)
+
+    for year in years:
+        for month in months:
+            num_turbines = len(wt_numbers)
+
+            wts = range(1,num_turbines+1)
+
+            comb_df = pd.DataFrame()
+
+            for wt_number in reversed(wts):
+                filename = os.path.join(resamp_dir,f'resamp_wt{wt_number:03d}_{year:4d}_{month:02d}.ftr')
+                wt_i = pd.read_feather(filename)
+                comb_df = wt_i.set_index('time',drop=True).join(comb_df)
+
+            comb_df.reset_index(inplace=True)
+            comb_df.to_feather(os.path.join(comb_dir,f'comb_{year:4d}_{month:02d}.ftr'))
+
 
         
