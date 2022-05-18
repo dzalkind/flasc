@@ -17,10 +17,15 @@ from itertools import product
 import numpy as np
 import pandas as pd
 
-from floris.utilities import wrap_360
+# from floris.utilities import wrap_360
 
 from . import utilities as fsut
 
+
+def wrap_360(x):
+    x = np.where(x < 0.0, x + 360.0, x)
+    x = np.where(x >= 360.0, x - 360.0, x)
+    return float(x)
 
 def df_movingaverage(
     df_in,

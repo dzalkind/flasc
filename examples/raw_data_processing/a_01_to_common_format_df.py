@@ -22,12 +22,12 @@ from flasc import time_operations as to
 import multiprocessing as mp
 
 
-import os
+import os, sys
 
-DT = 5
+DT = 1
 
-resamp_dir = f'/Users/dzalkind/Projects/AWAKEN/Engie_SCADA/processed/resampled_{DT}'
-comb_dir = f'/Users/dzalkind/Projects/AWAKEN/Engie_SCADA/processed/combined_{DT}'
+resamp_dir = f'/projects/awaken/dzalkind/processed/resampled_{DT}'
+comb_dir = f'/projects/awaken/dzalkind/processed/combined_{DT}'
 os.makedirs(resamp_dir,exist_ok=True)
 os.makedirs(comb_dir,exist_ok=True)
 
@@ -56,21 +56,20 @@ def a_01_resample(inputs):
     year = inputs['year']
     wt_number = inputs['wt_number']
 
-    base_dir = '/Users/dzalkind/Projects/AWAKEN/Engie_SCADA/farm=WIF_USKPL/'
+    base_dir = '/scratch/dzalkind/engie/raw'
 
-    filedir = os.path.join(
-        base_dir,
-        f'ent_code=WIT_USKPL_SS001_WT{wt_number:03d}',
-        f'year={year:4d}',
-        f'month={month:02d}'
-    )
+    # filedir = os.path.join(
+    #     base_dir,
+    #     f'ent_code=WIT_USKPL_SS001_WT{wt_number:03d}',
+    #     f'year={year:4d}',
+    #     f'month={month:02d}'
+    # )
 
-    files = glob.glob(os.path.join(filedir,'*.parquet'))
+    file = os.path.join(base_dir,f'kp.turbine.z02.00.{year}{month:02d}01.000000.wt{wt_number:03d}.parquet')
 
-    if len(files) > 1:
-        print('WARNING: more than one file in month!!!')
-    else:
-        df_engie = pd.read_parquet(files[0],engine='pyarrow')
+    print('Reading parquet')
+    df_engie = pd.read_parquet(file,engine='fastparquet')
+    print('Read parquet')
 
     scada_mapping = {
         'WindSpeed':f'ws_{wt_number-1:03d}',
@@ -94,6 +93,15 @@ def a_01_resample(inputs):
         df_raw[channel].rename(columns={'date':'time'},inplace=True)
         df_raw[channel].drop(labels=drop_cols,axis=1,inplace=True)
         df_raw[channel].reset_index(drop=True,inplace=True)
+
+        # Make first timestep same as first index
+        try:
+            df_first = pd.DataFrame({'time':tt[0],'value':df_raw[channel]['value'][0]},index=[-1])
+            df_raw[channel] = df_raw[channel].append(df_first)
+            df_raw[channel].index += 1
+            df_raw[channel].sort_index(inplace=True)
+        except:
+            pass
         
         
         print(f'{channel} -> {new_name}')
@@ -104,9 +112,12 @@ def a_01_resample(inputs):
             
         if channel in ['NacelleAngle','Status']:
             interp_method = 'nearest'
-            max_gap = 1
+            max_gap = DT
             df_new[new_name] = to.df_resample_by_interpolation(df_raw[channel],tt,circ,interp_method,max_gap=max_gap)
-            df_new[new_name]['value'].loc[0] = df_new[new_name]['value'].loc[df_new[new_name]['value'].first_valid_index()]
+            # try:
+            #     df_new[new_name]['value'].loc[0] = df_new[new_name]['value'].loc[df_new[new_name]['value'].first_valid_index()]
+            # except:
+            #     print(f"No valid indices in {channel} -> {new_name}")
             df_new[new_name] = df_new[new_name].ffill()
         else:
             interp_method = 'linear'
@@ -128,21 +139,21 @@ def a_01_resample(inputs):
 
     joined_df.reset_index(inplace=True)
     joined_df.to_feather(os.path.join(resamp_dir,f'resamp_wt{wt_number:03d}_{year:4d}_{month:02d}.ftr'))
+    sys.stdout.flush()
 
-
-
-if __name__ == "__main__":
+def main():
     # In this script, we rename the arbitrarily named variables from the
     # SCADA data to our common format: "wd_000", "wd_001", ..., "ws_000",
     # "ws_001", and so on. This helps to further automate and align
     # the next steps in data processing.
 
-    months = range(1,12)
+    months = range(2,13)
     years = [2021]
     wt_numbers = range(1,89)
 
-    cores = 4  # Running 8 bonked my computer!!
+    cores = 36  # Running 8 bonked my computer!!
 
+    print('here')
     input_list = []
 
     for year in years:
@@ -152,13 +163,13 @@ if __name__ == "__main__":
                 inputs['year'] = year
                 inputs['month'] = month
                 inputs['wt_number'] = wt_number
-                input_list.append(inputs)
 
                 filename = os.path.join(resamp_dir,f'resamp_wt{wt_number:03d}_{year:4d}_{month:02d}.ftr')
             
                 if not os.path.exists(filename):
                     input_list.append(inputs)
-                    # print(filename)
+                    print(filename)
+                    sys.stdout.flush()
 
     # Run cases
     if cores == 1:
@@ -185,6 +196,9 @@ if __name__ == "__main__":
 
             comb_df.reset_index(inplace=True)
             comb_df.to_feather(os.path.join(comb_dir,f'comb_{year:4d}_{month:02d}.ftr'))
+
+if __name__ == "__main__":
+    main()
 
 
         
