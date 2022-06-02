@@ -26,8 +26,8 @@ import os, sys
 
 DT = 1
 
-resamp_dir = f'/projects/awaken/dzalkind/processed/resampled_{DT}'
-comb_dir = f'/projects/awaken/dzalkind/processed/combined_{DT}'
+resamp_dir = f'/srv/data/nfs/scada/processed/resampled_{DT}'
+comb_dir = f'/srv/data/nfs/scada/processed/combined_{DT}'
 os.makedirs(resamp_dir,exist_ok=True)
 os.makedirs(comb_dir,exist_ok=True)
 
@@ -56,7 +56,7 @@ def a_01_resample(inputs):
     year = inputs['year']
     wt_number = inputs['wt_number']
 
-    base_dir = '/scratch/dzalkind/engie/raw'
+    base_dir = '/srv/data/nfs/scada/dap_raw'
 
     # filedir = os.path.join(
     #     base_dir,
@@ -67,9 +67,8 @@ def a_01_resample(inputs):
 
     file = os.path.join(base_dir,f'kp.turbine.z02.00.{year}{month:02d}01.000000.wt{wt_number:03d}.parquet')
 
-    print('Reading parquet')
-    df_engie = pd.read_parquet(file,engine='fastparquet')
-    print('Read parquet')
+    print(f'Reading {file}')
+    df_engie = pd.read_parquet(file)
 
     scada_mapping = {
         'WindSpeed':f'ws_{wt_number-1:03d}',
@@ -104,7 +103,7 @@ def a_01_resample(inputs):
             pass
         
         
-        print(f'{channel} -> {new_name}')
+        print(f'{year}.{month:02d}.wt{wt_number:03d}: {channel} -> {new_name}')
         if channel in ['WindDirection','NacelleAngle']:
             circ = True
         else:
@@ -147,13 +146,13 @@ def main():
     # "ws_001", and so on. This helps to further automate and align
     # the next steps in data processing.
 
-    months = range(2,13)
-    years = [2021]
-    wt_numbers = range(1,89)
+    months = range(2,3)
+    years = [2022]
+    wt_numbers = range(1,4)
 
-    cores = 36  # Running 8 bonked my computer!!
+    cores = 1  # Running 8 bonked my computer!!
 
-    print('here')
+    print('Running a_01 to resample SCADA')
     input_list = []
 
     for year in years:
@@ -168,7 +167,7 @@ def main():
             
                 if not os.path.exists(filename):
                     input_list.append(inputs)
-                    print(filename)
+                    print(f'Generating {filename}')
                     sys.stdout.flush()
 
     # Run cases
