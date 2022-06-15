@@ -13,35 +13,27 @@
 
 import numpy as np
 import pandas as pd
-import xarray as xr
-import matplotlib.pyplot as plt
-import glob
-import pyarrow.parquet as pq
-import time
 from flasc import time_operations as to
 import multiprocessing as mp
+from datetime import datetime
 
 
 import os, sys
 
+# Resampling time step
 DT = 1
 
+# Directories, update for your set up
 resamp_dir = f'/srv/data/nfs/scada/processed/resampled_{DT}'
 comb_dir = f'/srv/data/nfs/scada/processed/combined_{DT}'
+raw_data_dir = '/srv/data/nfs/scada/dap_raw'
+
+# Make directories
 os.makedirs(resamp_dir,exist_ok=True)
 os.makedirs(comb_dir,exist_ok=True)
 
-
-def load_data():
-    # Load the filtered data
-    root_path = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(root_path, "data", "00_raw_data")
-    df = pd.read_feather(os.path.join(data_path, "df_scada_60s.ftr"))
-    return df
-
 def get_time_array(dt,month,year):
-
-
+    # Set up time array 
     dt = np.timedelta64(dt,'s')
 
     start_date = np.datetime64(f'{year:4d}-{month:02d}')
@@ -56,20 +48,13 @@ def a_01_resample(inputs):
     year = inputs['year']
     wt_number = inputs['wt_number']
 
-    base_dir = '/srv/data/nfs/scada/dap_raw'
-
-    # filedir = os.path.join(
-    #     base_dir,
-    #     f'ent_code=WIT_USKPL_SS001_WT{wt_number:03d}',
-    #     f'year={year:4d}',
-    #     f'month={month:02d}'
-    # )
-
-    file = os.path.join(base_dir,f'kp.turbine.z02.00.{year}{month:02d}01.000000.wt{wt_number:03d}.parquet')
+    # Files with names as formatted by DAP, all in same directory (raw_data_dir)
+    file = os.path.join(raw_data_dir,f'kp.turbine.z02.00.{year}{month:02d}01.000000.wt{wt_number:03d}.parquet')
 
     print(f'Reading {file}')
     df_engie = pd.read_parquet(file)
 
+    # Mapping from SCADA name to our WFC conventions (with 0-indexing)
     scada_mapping = {
         'WindSpeed':f'ws_{wt_number-1:03d}',
         'WindDirection':f'wd_{wt_number-1:03d}',
@@ -79,7 +64,7 @@ def a_01_resample(inputs):
     }
 
     # Set up raw and new dataframes
-    df_raw = {}
+    df_raw = {}  # dict of dataframes for each scada channel, to be joined later
     df_new = {}
 
     drop_cols = [col for col in df_engie.columns if col not in ['date','value']]
@@ -87,6 +72,8 @@ def a_01_resample(inputs):
     tt = get_time_array(DT,month,year)
 
     for channel, new_name in scada_mapping.items():
+
+        # Grab data based on tag, sort, rename, remove other labels, reset index
         df_raw[channel] = df_engie.loc[df_engie['tag'] == channel].reset_index(drop=True)
         df_raw[channel].sort_values(by='date',inplace=True)
         df_raw[channel].rename(columns={'date':'time'},inplace=True)
@@ -96,13 +83,13 @@ def a_01_resample(inputs):
         # Make first timestep same as first index
         try:
             df_first = pd.DataFrame({'time':tt[0],'value':df_raw[channel]['value'][0]},index=[-1])
-            df_raw[channel] = df_raw[channel].append(df_first)
+            df_raw[channel] = pd.concat([df_raw[channel],df_first])
             df_raw[channel].index += 1
             df_raw[channel].sort_index(inplace=True)
         except:
             pass
         
-        
+        # RESAMPLING by interpolation
         print(f'{year}.{month:02d}.wt{wt_number:03d}: {channel} -> {new_name}')
         if channel in ['WindDirection','NacelleAngle']:
             circ = True
@@ -110,15 +97,17 @@ def a_01_resample(inputs):
             circ = False
             
         if channel in ['NacelleAngle','Status']:
+            # Interpolate these channels by nearest neighbor, but only if the gap bettween the interpolated time and 
+            # scada timestamp is less than DT, the sample time.  This basically latches each sample to a interpolated 
+            # timestamp and the others stay empty
             interp_method = 'nearest'
-            max_gap = DT
+            max_gap = DT            
             df_new[new_name] = to.df_resample_by_interpolation(df_raw[channel],tt,circ,interp_method,max_gap=max_gap)
-            # try:
-            #     df_new[new_name]['value'].loc[0] = df_new[new_name]['value'].loc[df_new[new_name]['value'].first_valid_index()]
-            # except:
-            #     print(f"No valid indices in {channel} -> {new_name}")
+
+            # Then all others are forward filled
             df_new[new_name] = df_new[new_name].ffill()
         else:
+            # Linear interpolation for all other channels
             interp_method = 'linear'
             max_gap = 600 
             df_new[new_name] = to.df_resample_by_interpolation(df_raw[channel],tt,circ,interp_method,max_gap=max_gap)
@@ -146,13 +135,17 @@ def main():
     # "ws_001", and so on. This helps to further automate and align
     # the next steps in data processing.
 
-    months = range(2,3)
+    # Select date range and turbine numbers to process
+    months = range(3,4)
     years = [2022]
     wt_numbers = range(1,4)
 
-    cores = 1  # Running 8 bonked my computer!!
+    cores = 1  # parallel processing, running 8 bonked my laptop!!
 
-    print('Running a_01 to resample SCADA')
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print(f'Running a_01 to resample SCADA @ {current_time}')
+    
     input_list = []
 
     for year in years:
@@ -165,6 +158,7 @@ def main():
 
                 filename = os.path.join(resamp_dir,f'resamp_wt{wt_number:03d}_{year:4d}_{month:02d}.ftr')
             
+                # Only process missing files in resamp_dir
                 if not os.path.exists(filename):
                     input_list.append(inputs)
                     print(f'Generating {filename}')
@@ -180,6 +174,7 @@ def main():
         with p:
             p.map(a_01_resample,input_list)
 
+    # Combine resampled dataframes for each turbine into combined dataframes of farm
     for year in years:
         for month in months:
             num_turbines = len(wt_numbers)
@@ -195,6 +190,11 @@ def main():
 
             comb_df.reset_index(inplace=True)
             comb_df.to_feather(os.path.join(comb_dir,f'comb_{year:4d}_{month:02d}.ftr'))
+
+    # Print how long all of this took
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print(f'Finished a_01 @ {current_time}')
 
 if __name__ == "__main__":
     main()
