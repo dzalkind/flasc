@@ -77,7 +77,7 @@ def a_01_plot(inputs):
         axs[i_ax].set_ylabel(channel)
     
     axs[-1].legend(loc='lower right')
-    [a.set_xlim([pd.Timestamp('2022-01-01 00:00:00'), pd.Timestamp('2022-01-01 03:00:00')]) for a in axs]
+    # [a.set_xlim([pd.Timestamp('2022-01-01 00:00:00'), pd.Timestamp('2022-01-01 03:00:00')]) for a in axs]
     axs[3].set_ylim([150,250])
     fig.savefig(os.path.join(plot_dir,f'{year}.{month:02d}.wt{wt_number:03d}.png'))
 
